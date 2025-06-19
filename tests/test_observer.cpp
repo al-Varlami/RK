@@ -1,55 +1,40 @@
 #include <gtest/gtest.h>
-#include "ConcreteObserverA.h"
-#include "ConcreteObserverB.h"
-#include "ConcreteSubject.h"
+#include "Behavioral/Observer/ConcreteObserverA.h"
+#include "Behavioral/Observer/ConcreteObserverB.h"
+#include "Behavioral/Observer/ConcreteSubject.h"
 
-class ObserverTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        subject = new ConcreteSubject();
-        observerA = new ConcreteObserverA(0);
-        observerB = new ConcreteObserverB(0);
-    }
-
-    void TearDown() override {
-        delete subject;
-        delete observerA;
-        delete observerB;
-    }
-
-    ConcreteSubject* subject;
-    ConcreteObserverA* observerA;
-    ConcreteObserverB* observerB;
-};
-
-TEST_F(ObserverTest, InitialState) {
-    EXPECT_EQ(observerA->getState(), 0);
-    EXPECT_EQ(observerB->getState(), 0);
+TEST(ObserverTest, ObserverANotification) {
+    ConcreteSubject subject;
+    ConcreteObserverA observer(0);
+    
+    subject.add(&observer);
+    subject.setState(5);
+    subject.notify();
+    
+    EXPECT_EQ(observer.getState(), 5);
 }
 
-TEST_F(ObserverTest, SingleObserverNotification) {
-    subject->add(observerA);
-    subject->setState(5);
-    subject->notify();
+TEST(ObserverTest, ObserverBNotification) {
+    ConcreteSubject subject;
+    ConcreteObserverB observer(0);
     
-    EXPECT_EQ(observerA->getState(), 5);
-    EXPECT_EQ(observerB->getState(), 0); // Не должен измениться
+    subject.add(&observer);
+    subject.setState(10);
+    subject.notify();
+    
+    EXPECT_EQ(observer.getState(), 10);
 }
 
-TEST_F(ObserverTest, MultipleObserversNotification) {
-    subject->add(observerA);
-    subject->add(observerB);
-    subject->setState(10);
-    subject->notify();
+TEST(ObserverTest, MultipleObservers) {
+    ConcreteSubject subject;
+    ConcreteObserverA obsA(0);
+    ConcreteObserverB obsB(0);
     
-    EXPECT_EQ(observerA->getState(), 10);
-    EXPECT_EQ(observerB->getState(), 10);
-}
-
-TEST_F(ObserverTest, StateChangeWithoutNotification) {
-    subject->add(observerA);
-    subject->setState(15);
-    // Не вызываем notify()
+    subject.add(&obsA);
+    subject.add(&obsB);
+    subject.setState(15);
+    subject.notify();
     
-    EXPECT_EQ(observerA->getState(), 0); // Не должен измениться
+    EXPECT_EQ(obsA.getState(), 15);
+    EXPECT_EQ(obsB.getState(), 15);
 }

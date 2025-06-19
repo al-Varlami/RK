@@ -3,18 +3,14 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:  # Для ручного запуска
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # Ограничение времени выполнения
-    
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -22,45 +18,39 @@ jobs:
           cmake \
           g++ \
           build-essential \
-          libgtest-dev \
-          libgmock-dev
-        
-    - name: Configure project
+          libgtest-dev
+
+    - name: Configure and build
       run: |
-        mkdir -p build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        
-    - name: Build project
-      run: |
-        cd build
+        mkdir build && cd build
+        cmake -DBUILD_TESTING=ON ..
         make -j$(nproc)
-        
+
     - name: Run tests
       run: |
         cd build
-        ctest --output-on-failure
-        
+        ctest --output-on-failure || (echo "Tests failed!"; exit 1)
+
     - name: Create DEB package
       run: |
-        mkdir -p observer-pkg/usr/local/bin
-        cp build/Behavioral/Observer/observer_demo observer-pkg/usr/local/bin/
+        mkdir -p pkg/usr/local/bin
+        cp build/Behavioral/Observer/observer_demo pkg/usr/local/bin/
         
-        mkdir -p observer-pkg/DEBIAN
-        cat > observer-pkg/DEBIAN/control <<EOF
+        mkdir -p pkg/DEBIAN
+        cat > pkg/DEBIAN/control <<EOF
         Package: observer-pattern
-        Version: 1.0
+        Version: 1.0-$(date +%Y%m%d)
         Section: utils
         Priority: optional
         Architecture: amd64
-        Maintainer: Your Name <your.email@example.com>
-        Description: Implementation of Observer Pattern
+        Maintainer: Auto Builder <noreply@example.com>
+        Description: Observer pattern implementation
         EOF
         
-        dpkg-deb --build observer-pkg
+        dpkg-deb --build pkg
         mkdir -p artifacts
-        mv observer-pkg.deb artifacts/observer-pattern_1.0_amd64.deb
-        
+        mv pkg.deb artifacts/observer-pattern.deb
+
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
