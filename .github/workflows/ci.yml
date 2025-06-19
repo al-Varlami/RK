@@ -1,10 +1,9 @@
 name: CI/CD Pipeline for Ubuntu 24.04
+
 on:
   push:
     branches: [master]
-    tags: ['v*'] 
-  release:
-    types: [created, edited]
+    tags: ['v*.*.*']  # Формат vX.Y.Z
 
 jobs:
   build:
@@ -12,6 +11,7 @@ jobs:
     env:
       SOURCE_DIR: ${{ github.workspace }}
       BUILD_DIR: ${{ github.workspace }}/build
+      VERSION: ${{ github.ref_name }}
 
     steps:
     - uses: actions/checkout@v4
@@ -53,13 +53,15 @@ jobs:
 
     - name: Create DEB package
       run: |
+        # Извлекаем версию из тега (удаляем 'v' в начале)
+        VERSION=${VERSION#v}
         mkdir -p pkg/usr/local/bin
         install -m 755 "$BUILD_DIR/Behavioral/Observer/observer_demo" pkg/usr/local/bin/
         
         mkdir -p pkg/DEBIAN
         cat <<EOF > pkg/DEBIAN/control
         Package: observer-pattern
-        Version: 1.0-$(date +%Y%m%d)
+        Version: $VERSION
         Section: utils
         Priority: optional
         Architecture: amd64
@@ -78,23 +80,24 @@ jobs:
         name: deb-package
         path: artifacts/observer-pattern.deb
 
-  release:
+  create-release:
     needs: build
     runs-on: ubuntu-24.04
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
     - uses: actions/download-artifact@v4
       with:
         name: deb-package
         path: .
 
-    - name: Create Release
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        files: |
-          observer-pattern.deb
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         body: |
           ### Автоматическая сборка для Ubuntu 24.04
+          **Версия:** ${{ github.ref_name }}
           **Дата:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
           **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
@@ -102,3 +105,5 @@ jobs:
           ```bash
           sudo apt install ./observer-pattern.deb
           ```
+        files: |
+          observer-pattern.deb
