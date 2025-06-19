@@ -1,5 +1,10 @@
-name: CI/CD Proven
-on: [workflow_dispatch, push]
+name: Full CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [created]
 
 jobs:
   build:
@@ -7,30 +12,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug structure
-        run: tree -L 3
+      - name: Clean workspace
+        run: rm -rf build/ || true
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ build-essential
+          sudo apt-get install -y cmake g++ build-essential libgtest-dev
+
+      - name: Configure
+        run: |
+          mkdir -p build && cd build
+          cmake -DCMAKE_BUILD_TYPE=Release ..
 
       - name: Build
-        run: |
-          mkdir build && cd build
-          cmake ..
-          make
+        working-directory: ./build
+        run: make -j$(nproc)
 
       - name: Test
-        run: |
-          cd build
-          ./Behavioral/Observer/observer_demo
-          ctest --output-on-failure || true
+        working-directory: ./build
+        run: ctest --output-on-failure
 
-      - name: Prepare artifact
-        run: mkdir -p artifacts && touch artifacts/dummy.deb
+      - name: Create DEB package
+        run: |
+          mkdir -p pkg/usr/local/bin
+          install -m 755 build/Behavioral/Observer/observer_demo pkg/usr/local/bin/
+          
+          mkdir -p pkg/DEBIAN
+          cat <<EOF > pkg/DEBIAN/control
+          Package: observer-pattern
+          Version: 1.0-$(date +%Y%m%d)
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: CI <ci@example.com>
+          Description: Observer Pattern Implementation
+          Depends: libc6
+          EOF
+          
+          dpkg-deb --build pkg
+          mkdir -p artifacts
+          mv pkg.deb artifacts/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: output
-          path: artifacts/
+          name: deb-package
+          path: artifacts/*.deb
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb-package
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            *.deb
