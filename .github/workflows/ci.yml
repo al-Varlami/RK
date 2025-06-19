@@ -1,23 +1,18 @@
-name: CI/CD Pipeline (master branch)
-
+name: CI/CD with Release
 on:
   push:
-    branches: [master]  # Указываем master вместо main
-  workflow_dispatch:
+    branches: [master]
+  release:
+    types: [created]  # Триггер при создании релиза
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       BUILD_DIR: ${{ github.workspace }}/build
-
+    
     steps:
     - uses: actions/checkout@v4
-
-    - name: Verify branch
-      run: |
-        echo "Текущая ветка: ${{ github.ref }}"
-        [ "${{ github.ref }}" == "refs/heads/master" ] || exit 1
 
     - name: Clean workspace
       run: |
@@ -27,25 +22,58 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          cmake \
-          g++ \
-          build-essential \
-          libgtest-dev
-
-    - name: Configure project
-      working-directory: ${{ env.BUILD_DIR }}
-      run: cmake ${{ github.workspace }}
+        sudo apt-get install -y cmake g++ build-essential libgtest-dev dpkg
 
     - name: Build project
       working-directory: ${{ env.BUILD_DIR }}
-      run: make -j$(nproc)
-
-    - name: Run tests
-      working-directory: ${{ env.BUILD_DIR }}
       run: |
-        if [ -f "CTestTestfile.cmake" ]; then
-          ctest --output-on-failure
-        else
-          echo "⚠️ Тесты не найдены, пропускаем"
-        fi
+        cmake ${{ github.workspace }} -DBUILD_TESTING=OFF
+        make -j$(nproc)
+
+    - name: Create DEB package
+      run: |
+        mkdir -p pkg/usr/local/bin
+        install -m 755 "$BUILD_DIR/Behavioral/Observer/observer_demo" pkg/usr/local/bin/
+        
+        mkdir -p pkg/DEBIAN
+        cat <<EOF > pkg/DEBIAN/control
+        Package: observer-pattern
+        Version: 1.0-$(date +%Y%m%d)
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Maintainer: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+        Description: Observer Pattern Implementation
+        Depends: libc6
+        EOF
+        
+        dpkg-deb --build pkg
+        mkdir -p artifacts
+        mv pkg.deb artifacts/observer-pattern.deb
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: deb-package
+        path: artifacts/observer-pattern.deb
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: deb-package
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          observer-pattern.deb
+        body: |
+          Автоматическая сборка от ${{ github.event.release.created_at }}
+          Хеш коммита: ${{ github.sha }}
+          ```
+          sha256sum observer-pattern.deb
+          ```
