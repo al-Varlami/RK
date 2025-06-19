@@ -1,85 +1,89 @@
-name: CI/CD with Forced Release Build
+name: CI/CD Pipeline with Reliable Builds
 on:
   push:
     branches: [master]
   release:
-    types: [created, edited]  # Триггер при создании и редактировании релиза
+    types: [created, edited]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      SOURCE_DIR: ${{ github.workspace }}
       BUILD_DIR: ${{ github.workspace }}/build
-      FORCE_REBUILD: ${{ github.event_name == 'release' }}  # Флаг принудительной пересборки
+      INSTALL_DIR: ${{ github.workspace }}/pkg/usr/local/bin
 
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Полная история коммитов для работы с тегами
+        fetch-depth: 0
 
-    - name: Force clean on release
-      if: env.FORCE_REBUILD == 'true'
+    - name: Clean workspace
       run: |
-        echo "♻️ ПРИНУДИТЕЛЬНАЯ ПЕРЕСБОРКА ДЛЯ РЕЛИЗА"
-        rm -rf "$BUILD_DIR" artifacts/ pkg/
-        git clean -fdx
-
-    - name: Setup build directory
-      run: |
+        echo "Полная очистка рабочих директорий..."
+        rm -rf "$BUILD_DIR" "$INSTALL_DIR" artifacts/ pkg/
         mkdir -p "$BUILD_DIR"
-        echo "Build dir: $BUILD_DIR"
-        ls -la "$BUILD_DIR/.."
 
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake \
-          g++ \
+          cmake=3.22* \
+          g++=10.3* \
           build-essential \
-          libgtest-dev \
+          libgtest-dev=1.11* \
           dpkg \
           file
 
     - name: Configure project
-      working-directory: ${{ env.BUILD_DIR }}
+      working-directory: $BUILD_DIR
       run: |
-        cmake ${{ github.workspace }} \
-          -DBUILD_TESTING=OFF \
-          -DVERSION_SUFFIX=-$(date +%Y%m%d-%H%M)
+        echo "Конфигурация проекта..."
+        echo "Исходный код: $SOURCE_DIR"
+        echo "Директория сборки: $BUILD_DIR"
+        cmake "$SOURCE_DIR" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DVERSION_SUFFIX=-$(date +%Y%m%d-%H%M%S)
 
     - name: Build project
-      working-directory: ${{ env.BUILD_DIR }}
+      working-directory: $BUILD_DIR
       run: |
-        make -j$(nproc)
-        file Behavioral/Observer/observer_demo  # Проверка бинарника
+        echo "Сборка проекта..."
+        make -j$(nproc) VERBOSE=1
+        echo "Проверка бинарника:"
+        file Behavioral/Observer/observer_demo
+        ldd Behavioral/Observer/observer_demo || true
 
     - name: Create DEB package
       run: |
-        mkdir -p pkg/usr/local/bin
-        install -m 755 "$BUILD_DIR/Behavioral/Observer/observer_demo" pkg/usr/local/bin/
+        echo "Создание DEB-пакета..."
+        mkdir -p "$INSTALL_DIR"
+        install -m 755 "$BUILD_DIR/Behavioral/Observer/observer_demo" "$INSTALL_DIR"/
         
         mkdir -p pkg/DEBIAN
         cat <<EOF > pkg/DEBIAN/control
         Package: observer-pattern
-        Version: 1.0-$(date +%Y%m%d-%H%M)
+        Version: 1.0-$(date +%Y%m%d-%H%M%S)
         Section: utils
         Priority: optional
         Architecture: amd64
         Maintainer: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
         Description: Observer Pattern Implementation
-        Depends: libc6
+        Depends: libc6 (>= 2.31)
         EOF
         
         dpkg-deb --build pkg
         mkdir -p artifacts
         mv pkg.deb artifacts/observer-pattern.deb
         sha256sum artifacts/observer-pattern.deb > artifacts/SHA256SUMS
+        echo "Создан пакет:"
+        ls -lh artifacts/
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: release-assets
+        name: debian-package
         path: |
           artifacts/observer-pattern.deb
           artifacts/SHA256SUMS
@@ -92,23 +96,40 @@ jobs:
     steps:
     - uses: actions/download-artifact@v4
       with:
-        name: release-assets
-        path: release-files
+        name: debian-package
+        path: release-assets
 
-    - name: Create Release
+    - name: Verify package
+      run: |
+        echo "Проверка пакета..."
+        dpkg-deb -I release-assets/observer-pattern.deb
+        dpkg-deb -c release-assets/observer-pattern.deb
+
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          release-files/observer-pattern.deb
-          release-files/SHA256SUMS
+          release-assets/observer-pattern.deb
+          release-assets/SHA256SUMS
         body: |
-          ### Автоматически собранный релиз
-          **Дата сборки:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')  
-          **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})  
-          **Версия пакета:** 1.0-$(date +%Y%m%d-%H%M)  
+          ## 🚀 Собранный релиз Observer Pattern
 
+          ### Техническая информация
+          - **Версия пакета:** 1.0-$(date +%Y%m%d-%H%M%S)
+          - **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          - **Дата сборки:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+
+          ### Установка
           ```bash
-          # Для установки:
+          # Скачать пакет
           wget ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/observer-pattern.deb
-          sudo dpkg -i observer-pattern.deb
+
+          # Установить с зависимостями
+          sudo apt install ./observer-pattern.deb
+
+          # Проверить контрольную сумму
+          sha256sum -c SHA256SUMS
           ```
+
+          ### Изменения
+          ${{ github.event.release.body }}
