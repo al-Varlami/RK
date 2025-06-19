@@ -133,4 +133,4 @@ jobs:
         files: |
           observer-pattern.deb
       env:
-        GITHUB_TOKEN: ${{ secrets.FULL_ACCESS_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN || secrets.PAT_TOKEN }}
