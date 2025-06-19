@@ -1,15 +1,70 @@
-name: CI/CD
-on: [push, workflow_dispatch]  # Срабатывает при любом push и позволяет ручной запуск
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Print debug info
+
+    - name: Debug structure
       run: |
-        echo "✅ Workflow triggered!"
-        echo "Branch: ${{ github.ref }}"
-        echo "Event: ${{ github.event_name }}"
-        ls -la
+        echo "Project structure:"
+        tree -L 3
+        echo "CMake version:"
+        cmake --version
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          g++ \
+          build-essential \
+          libgtest-dev
+
+    - name: Configure and build
+      run: |
+        mkdir -p build
+        cd build
+        cmake -DBUILD_TESTING=ON ..
+        make -j$(nproc)
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure --verbose
+
+    - name: Create DEB package
+      run: |
+        mkdir -p pkg/usr/local/bin
+        cp build/Behavioral/Observer/observer_demo pkg/usr/local/bin/
+        
+        mkdir -p pkg/DEBIAN
+        cat > pkg/DEBIAN/control <<EOF
+        Package: observer-pattern
+        Version: 1.0-$(date +%Y%m%d)
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Maintainer: Auto Builder <noreply@example.com>
+        Description: Observer pattern implementation
+        Depends: libc6
+        EOF
+        
+        dpkg-deb --build pkg
+        mkdir -p artifacts
+        mv pkg.deb artifacts/
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: deb-package
+        path: build/artifacts/*.deb
+        retention-days: 5
