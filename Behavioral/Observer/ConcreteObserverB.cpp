@@ -1,5 +1,5 @@
 #include "ConcreteObserverB.h"
-#include <ISubject.h>
+#include "ISubject.h"
 
 ConcreteObserverB::ConcreteObserverB(const int state) : m_state(state) {}
 

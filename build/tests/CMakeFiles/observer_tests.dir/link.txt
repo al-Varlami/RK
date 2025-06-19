@@ -1,0 +1,1 @@
+/usr/bin/c++     CMakeFiles/observer_tests.dir/test_observer.cpp.o  -o observer_tests  ../Behavioral/Observer/libobserver_lib.a ../lib/libgtest_main.a ../lib/libgtest.a -lpthread 

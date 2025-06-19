@@ -1,6 +1,6 @@
-#include <ConcreteObserverA.h>
-#include <ConcreteObserverB.h>
-#include <ConcreteSubject.h>
+#include "ConcreteObserverA.h"
+#include "ConcreteObserverB.h"
+#include "ConcreteSubject.h"
 
 #include <iostream>
 

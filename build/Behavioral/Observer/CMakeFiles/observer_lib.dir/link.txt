@@ -1,0 +1,2 @@
+/usr/bin/ar qc libobserver_lib.a  CMakeFiles/observer_lib.dir/ConcreteObserverA.cpp.o CMakeFiles/observer_lib.dir/ConcreteObserverB.cpp.o CMakeFiles/observer_lib.dir/ConcreteSubject.cpp.o
+/usr/bin/ranlib libobserver_lib.a

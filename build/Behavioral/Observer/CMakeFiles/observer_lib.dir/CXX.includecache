@@ -1,0 +1,46 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverA.cpp
+ConcreteObserverA.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverA.h
+ISubject.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ISubject.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverA.h
+IObserver.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/IObserver.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverB.cpp
+ConcreteObserverB.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverB.h
+ISubject.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ISubject.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteObserverB.h
+IObserver.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/IObserver.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteSubject.cpp
+ConcreteSubject.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteSubject.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ConcreteSubject.h
+ISubject.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ISubject.h
+IObserver.h
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/IObserver.h
+vector
+-
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/IObserver.h
+
+/home/onlyman/al-Varlami/RK/Behavioral/Observer/ISubject.h
+IObserver.h
+-
+
