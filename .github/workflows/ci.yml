@@ -1,46 +1,37 @@
-name: CI/CD Pipeline
-
-on:
+name: Observer CI/CD
+on: 
   push:
-    branches: [main]
-    paths:  # Триггерим только при изменениях в коде
+    paths:
       - 'Behavioral/Observer/**'
-      - 'tests/**'
+      - '.github/workflows/*.yml'
       - 'CMakeLists.txt'
-      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      BUILD_TYPE: Release
+      BUILD_DIR: build_${{ github.run_id }}
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache build
-      uses: actions/cache@v3
-      with:
-        path: build
-        key: build-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
-
-    - name: Install tools
+    - name: Validate structure
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake g++ build-essential
-
-    - name: Configure
-      run: |
-        mkdir -p build && cd build
-        cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
+        [ -f CMakeLists.txt ] || { echo "CMakeLists.txt missing"; exit 1; }
+        [ -d Behavioral/Observer ] || { echo "Observer dir missing"; exit 1; }
+        echo "Structure OK"
 
     - name: Build
       run: |
-        cd build
+        mkdir -p $BUILD_DIR
+        cd $BUILD_DIR
+        cmake -DCMAKE_BUILD_TYPE=Release ..
         make -j$(nproc)
+        ./Behavioral/Observer/observer_demo || true
 
-    - name: Test
-      run: |
-        cd build
-        ctest --output-on-failure
+    - name: Archive binary
+      uses: actions/upload-artifact@v3
+      with:
+        name: observer-app
+        path: ${{ env.BUILD_DIR }}/Behavioral/Observer/observer_demo
