@@ -1,37 +1,70 @@
-name: Observer CI/CD
-on: 
+name: CI/CD Pipeline
+
+on:
   push:
-    paths:
-      - 'Behavioral/Observer/**'
-      - '.github/workflows/*.yml'
-      - 'CMakeLists.txt'
-  workflow_dispatch:
+    branches: [main]
+  release:
+    types: [created]  # Триггер при создании релиза
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-    env:
-      BUILD_DIR: build_${{ github.run_id }}
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Validate structure
-      run: |
-        [ -f CMakeLists.txt ] || { echo "CMakeLists.txt missing"; exit 1; }
-        [ -d Behavioral/Observer ] || { echo "Observer dir missing"; exit 1; }
-        echo "Structure OK"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ build-essential libgtest-dev
 
-    - name: Build
-      run: |
-        mkdir -p $BUILD_DIR
-        cd $BUILD_DIR
-        cmake -DCMAKE_BUILD_TYPE=Release ..
-        make -j$(nproc)
-        ./Behavioral/Observer/observer_demo || true
+      - name: Build and test
+        run: |
+          mkdir build && cd build
+          cmake -DBUILD_TESTING=ON ..
+          make -j$(nproc)
+          ctest --output-on-failure
 
-    - name: Archive binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: observer-app
-        path: ${{ env.BUILD_DIR }}/Behavioral/Observer/observer_demo
+      - name: Create DEB package
+        run: |
+          mkdir -p pkg/usr/local/bin
+          cp build/Behavioral/Observer/observer_demo pkg/usr/local/bin/
+          
+          mkdir -p pkg/DEBIAN
+          cat > pkg/DEBIAN/control <<EOF
+          Package: observer-pattern
+          Version: 1.0-$(git rev-parse --short HEAD)
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+          Description: Observer pattern implementation (Commit: ${{ github.sha }})
+          EOF
+          
+          dpkg-deb --build pkg
+          mkdir -p artifacts
+          mv pkg.deb artifacts/observer-pattern.deb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: artifacts/observer-pattern.deb
+
+  release:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb-package
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            observer-pattern.deb
+          body: |
+            DEB package automatically built from commit ${{ github.sha }}
+            ### Changes:
+            ${{ github.event.release.body }}
