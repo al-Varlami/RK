@@ -1,34 +1,58 @@
-name: CI/CD with Release
+name: CI/CD with Forced Release Build
 on:
   push:
     branches: [master]
   release:
-    types: [created]  # Триггер при создании релиза
+    types: [created, edited]  # Триггер при создании и редактировании релиза
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       BUILD_DIR: ${{ github.workspace }}/build
-    
+      FORCE_REBUILD: ${{ github.event_name == 'release' }}  # Флаг принудительной пересборки
+
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Полная история коммитов для работы с тегами
 
-    - name: Clean workspace
+    - name: Force clean on release
+      if: env.FORCE_REBUILD == 'true'
       run: |
-        rm -rf "$BUILD_DIR" || true
+        echo "♻️ ПРИНУДИТЕЛЬНАЯ ПЕРЕСБОРКА ДЛЯ РЕЛИЗА"
+        rm -rf "$BUILD_DIR" artifacts/ pkg/
+        git clean -fdx
+
+    - name: Setup build directory
+      run: |
         mkdir -p "$BUILD_DIR"
+        echo "Build dir: $BUILD_DIR"
+        ls -la "$BUILD_DIR/.."
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake g++ build-essential libgtest-dev dpkg
+        sudo apt-get install -y \
+          cmake \
+          g++ \
+          build-essential \
+          libgtest-dev \
+          dpkg \
+          file
+
+    - name: Configure project
+      working-directory: ${{ env.BUILD_DIR }}
+      run: |
+        cmake ${{ github.workspace }} \
+          -DBUILD_TESTING=OFF \
+          -DVERSION_SUFFIX=-$(date +%Y%m%d-%H%M)
 
     - name: Build project
       working-directory: ${{ env.BUILD_DIR }}
       run: |
-        cmake ${{ github.workspace }} -DBUILD_TESTING=OFF
         make -j$(nproc)
+        file Behavioral/Observer/observer_demo  # Проверка бинарника
 
     - name: Create DEB package
       run: |
@@ -38,7 +62,7 @@ jobs:
         mkdir -p pkg/DEBIAN
         cat <<EOF > pkg/DEBIAN/control
         Package: observer-pattern
-        Version: 1.0-$(date +%Y%m%d)
+        Version: 1.0-$(date +%Y%m%d-%H%M)
         Section: utils
         Priority: optional
         Architecture: amd64
@@ -50,12 +74,16 @@ jobs:
         dpkg-deb --build pkg
         mkdir -p artifacts
         mv pkg.deb artifacts/observer-pattern.deb
+        sha256sum artifacts/observer-pattern.deb > artifacts/SHA256SUMS
 
-    - name: Upload artifact
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: deb-package
-        path: artifacts/observer-pattern.deb
+        name: release-assets
+        path: |
+          artifacts/observer-pattern.deb
+          artifacts/SHA256SUMS
+        retention-days: 7
 
   release:
     needs: build
@@ -64,16 +92,23 @@ jobs:
     steps:
     - uses: actions/download-artifact@v4
       with:
-        name: deb-package
+        name: release-assets
+        path: release-files
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          observer-pattern.deb
+          release-files/observer-pattern.deb
+          release-files/SHA256SUMS
         body: |
-          Автоматическая сборка от ${{ github.event.release.created_at }}
-          Хеш коммита: ${{ github.sha }}
-          ```
-          sha256sum observer-pattern.deb
+          ### Автоматически собранный релиз
+          **Дата сборки:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')  
+          **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})  
+          **Версия пакета:** 1.0-$(date +%Y%m%d-%H%M)  
+
+          ```bash
+          # Для установки:
+          wget ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}/observer-pattern.deb
+          sudo dpkg -i observer-pattern.deb
           ```
