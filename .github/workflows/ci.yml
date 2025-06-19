@@ -3,14 +3,7 @@ name: CI/CD Pipeline for Ubuntu 24.04
 on:
   push:
     branches: [master]
-    tags: ['v*.*.*']  # Формат vX.Y.Z
-
-# Права для всего workflow
-permissions:
-  contents: write
-  packages: write
-  releases: write
-  id-token: write  # Критично для OIDC авторизации
+    tags: ['v*.*.*']  # Format vX.Y.Z
 
 jobs:
   build:
@@ -19,10 +12,13 @@ jobs:
       SOURCE_DIR: ${{ github.workspace }}
       BUILD_DIR: ${{ github.workspace }}/build
 
+    permissions:
+      contents: write
+
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Полная история для работы с тегами
+        fetch-depth: 0  # Full history for tags
 
     - name: Clean workspace
       run: |
@@ -105,8 +101,6 @@ jobs:
     
     permissions:
       contents: write
-      packages: write
-      releases: write
       id-token: write
 
     steps:
@@ -121,12 +115,12 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         body: |
-          ### Автоматическая сборка для Ubuntu 24.04
-          **Версия:** ${{ github.ref_name }}
-          **Дата сборки:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
-          **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          ### Automatic build for Ubuntu 24.04
+          **Version:** ${{ github.ref_name }}
+          **Build date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          **Commit:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
-          ### Установка
+          ### Installation
           ```bash
           sudo apt install ./observer-pattern.deb
           ```
