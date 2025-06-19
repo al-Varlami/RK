@@ -3,68 +3,44 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main]
+    paths:  # Триггерим только при изменениях в коде
+      - 'Behavioral/Observer/**'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    env:
+      BUILD_TYPE: Release
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Debug structure
-      run: |
-        echo "Project structure:"
-        tree -L 3
-        echo "CMake version:"
-        cmake --version
+    - name: Cache build
+      uses: actions/cache@v3
+      with:
+        path: build
+        key: build-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
 
-    - name: Install dependencies
+    - name: Install tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          cmake \
-          g++ \
-          build-essential \
-          libgtest-dev
+        sudo apt-get install -y cmake g++ build-essential
 
-    - name: Configure and build
+    - name: Configure
       run: |
-        mkdir -p build
+        mkdir -p build && cd build
+        cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
+
+    - name: Build
+      run: |
         cd build
-        cmake -DBUILD_TESTING=ON ..
         make -j$(nproc)
 
-    - name: Run tests
+    - name: Test
       run: |
         cd build
-        ctest --output-on-failure --verbose
-
-    - name: Create DEB package
-      run: |
-        mkdir -p pkg/usr/local/bin
-        cp build/Behavioral/Observer/observer_demo pkg/usr/local/bin/
-        
-        mkdir -p pkg/DEBIAN
-        cat > pkg/DEBIAN/control <<EOF
-        Package: observer-pattern
-        Version: 1.0-$(date +%Y%m%d)
-        Section: utils
-        Priority: optional
-        Architecture: amd64
-        Maintainer: Auto Builder <noreply@example.com>
-        Description: Observer pattern implementation
-        Depends: libc6
-        EOF
-        
-        dpkg-deb --build pkg
-        mkdir -p artifacts
-        mv pkg.deb artifacts/
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: deb-package
-        path: build/artifacts/*.deb
-        retention-days: 5
+        ctest --output-on-failure
