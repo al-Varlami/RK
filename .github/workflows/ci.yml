@@ -5,16 +5,24 @@ on:
     branches: [master]
     tags: ['v*.*.*']  # Формат vX.Y.Z
 
+# Права для всего workflow
+permissions:
+  contents: write
+  packages: write
+  releases: write
+  id-token: write  # Критично для OIDC авторизации
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     env:
       SOURCE_DIR: ${{ github.workspace }}
       BUILD_DIR: ${{ github.workspace }}/build
-      VERSION: ${{ github.ref_name }}
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Полная история для работы с тегами
 
     - name: Clean workspace
       run: |
@@ -51,17 +59,27 @@ jobs:
         make -j$(nproc)
         file Behavioral/Observer/observer_demo
 
+    - name: Determine package version
+      id: version
+      run: |
+        if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Using tag version: $VERSION"
+        else
+          VERSION="0.0.0-$(date +%Y%m%d)"
+          echo "Using default version: $VERSION"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
     - name: Create DEB package
       run: |
-        # Извлекаем версию из тега (удаляем 'v' в начале)
-        VERSION=${VERSION#v}
         mkdir -p pkg/usr/local/bin
         install -m 755 "$BUILD_DIR/Behavioral/Observer/observer_demo" pkg/usr/local/bin/
         
         mkdir -p pkg/DEBIAN
         cat <<EOF > pkg/DEBIAN/control
         Package: observer-pattern
-        Version: $VERSION
+        Version: ${{ steps.version.outputs.version }}
         Section: utils
         Priority: optional
         Architecture: amd64
@@ -84,6 +102,13 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+      packages: write
+      releases: write
+      id-token: write
+
     steps:
     - uses: actions/download-artifact@v4
       with:
@@ -98,12 +123,14 @@ jobs:
         body: |
           ### Автоматическая сборка для Ubuntu 24.04
           **Версия:** ${{ github.ref_name }}
-          **Дата:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
+          **Дата сборки:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')
           **Коммит:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
           
-          Установка:
+          ### Установка
           ```bash
           sudo apt install ./observer-pattern.deb
           ```
         files: |
           observer-pattern.deb
+      env:
+        GITHUB_TOKEN: ${{ secrets.FULL_ACCESS_TOKEN }}
